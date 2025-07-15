@@ -1,5 +1,15 @@
 use macroquad::{prelude::*};
-//Goofy ahh fullscreen setup
+use std::process::exit;
+use std::fs;
+fn load_score() -> u32 {
+    fs::read_to_string("score.txt")
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(0)
+}
+fn save_score(score: u32) {
+    fs::write("score.txt", score.to_string()).unwrap();
+}
 fn window_conf() -> Conf {
     Conf {
         fullscreen: true,
@@ -7,13 +17,12 @@ fn window_conf() -> Conf {
         ..Default::default()
     }
 }
-//Func to calculate player movement
 fn calculate_player(mut x: f32, mut y: f32, mut xm: f32, mut ym: f32) -> (f32, f32, f32, f32) {
     let friction: f32 = 25.0;
     let dims: f32 = 50.0;
     let mut input_x = 0.0;
     let mut input_y = 0.0;
-    if is_key_down(KeyCode::Up) || is_key_down(KeyCode::W) { input_y -= 1.0; } else { input_y += 1.0; }
+    if is_key_down(KeyCode::Up) || is_key_down(KeyCode::W) || is_key_down(KeyCode::Space) { input_y -= 1.0; } else { input_y += 1.0; }
     if is_key_down(KeyCode::Left) || is_key_down(KeyCode::A) { input_x -= 1.0; } else if is_key_down(KeyCode::Right) || is_key_down(KeyCode::D) { input_x += 1.0; }
     let mag = ((input_x * input_x + input_y * input_y) as f32).sqrt();
     if mag > 1.0 {
@@ -50,7 +59,7 @@ fn calculate_player(mut x: f32, mut y: f32, mut xm: f32, mut ym: f32) -> (f32, f
     }
     return (x, y, xm, ym)
 }
-fn player_colliding(px: f32, py: f32, ph: f32, pw: f32, ox: f32, oy: f32, oh: f32, ow: f32) -> bool {
+fn collision(px: f32, py: f32, ph: f32, pw: f32, ox: f32, oy: f32, oh: f32, ow: f32) -> bool {
     let player_right: f32 = px + pw;
     let player_bottom: f32 = py + ph;
     let obstacle_right: f32 = ox + ow;
@@ -62,7 +71,54 @@ fn player_colliding(px: f32, py: f32, ph: f32, pw: f32, ox: f32, oy: f32, oh: f3
 #[macroquad::main(window_conf)]
 async fn main() {
     next_frame().await;
+    let mut playdims: f32 = 100.0;
+    let mut quitdims: f32 = 100.0;
+    let mut first_play: bool = true;
     loop {
+        let top_score: u32 = load_score();
+        loop {
+        if is_key_pressed(KeyCode::P) { first_play = false; break; }
+        if is_key_pressed(KeyCode::Q) { exit(0) }
+        let mut playx: f32 = (screen_width() / 2.0) - (playdims / 2.0);
+        let mut playy: f32 = (screen_height() / 2.0) - (playdims / 2.0) + 100.0;
+        let mut quitx: f32 = (screen_width() / 2.0) - (quitdims / 2.0);
+        let mut quity: f32 = (screen_height() / 2.0) - (quitdims / 2.0) + 250.0;
+        let textx: f32 = screen_width() / 2.0;
+        let texty: f32 = (screen_height() / 2.0) - 50.0;
+        if collision(mouse_position().0, mouse_position().1, 0.1, 0.1, playx, playy, playdims, playdims) {
+            if is_mouse_button_pressed(MouseButton::Left) {
+                first_play = false;
+                break;
+            }
+            playdims = 120.0;
+        } else {
+            playdims = 100.0;
+        }
+        if collision(mouse_position().0, mouse_position().1, 0.1, 0.1, quitx, quity, quitdims, quitdims) {
+            if is_mouse_button_pressed(MouseButton::Left) {
+                exit(0);
+            }
+            quitdims = 120.0;
+        } else {
+            quitdims = 100.0;
+        }
+        playx = (screen_width() / 2.0) - (playdims / 2.0);
+        playy = (screen_height() / 2.0) - (playdims / 2.0) + 100.0;
+        quitx = (screen_width() / 2.0) - (quitdims / 2.0);
+        quity = (screen_height() / 2.0) - (quitdims / 2.0) + 250.0;
+        clear_background(BLUE);
+        if first_play {
+            draw_text("Play", textx - 150.0, texty, 200.0, ORANGE);
+        } else {
+            draw_text("Play Again?", textx - 450.0, texty, 200.0, ORANGE);
+        }
+        draw_text(&format!("Top score: {}", top_score.to_string()), textx - 175.0, texty + 80.0, 75.0, ORANGE);
+        draw_rectangle(playx, playy, playdims, playdims, ORANGE);
+        draw_text("P", playx + 30.0, playy + 60.0, 80.0, RED);
+        draw_rectangle(quitx, quity, quitdims, quitdims, ORANGE);
+        draw_text("Q", quitx + 30.0, quity + 60.0, 80.0, RED);
+        next_frame().await;
+        }
         let pdims: f32 = 50.0;
         let ow: f32 = 50.0;
         let oh: f32 = screen_height() - 2.0 * pdims;
@@ -74,21 +130,17 @@ async fn main() {
         let mut pym: f32 = 0.0;
         let mut score: u32 = 0;
         loop {
-            if player_colliding(px, py, pdims, pdims, ox, oy, oh, ow) { println!("Your score was {}!", score); break }
+            if collision(px, py, pdims, pdims, ox, oy, oh, ow) { break }
             if ox + ow <= 0.0 { ox = screen_width(); oy = rand::gen_range(0.0, screen_height() - oh); score += 1; }
             (px, py, pxm, pym) = calculate_player(px, py, pxm, pym);
             ox -= 10.0 + (2 * (score/5)) as f32;
             clear_background(BLUE);
-            //Obstacle WIP
             draw_rectangle(ox, oy, ow, oh, RED);
-            //Draw the player
             draw_rectangle(px, py, pdims, pdims, YELLOW);
             let your_score: String = ("Score: ".to_string() + &score.to_string()).to_string();
             draw_text(&your_score, 0.0, 30.0, 50.0, ORANGE);
             next_frame().await;
         }
-        loop {
-
-        }
+        if score > load_score() { save_score(score) }
     }
 }
