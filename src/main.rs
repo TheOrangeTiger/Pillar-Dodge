@@ -17,6 +17,14 @@ fn window_conf() -> Conf {
         ..Default::default()
     }
 }
+fn fade_in(mut current_alpha: f32, rate: f32) -> f32 {
+    current_alpha += rate;
+    return current_alpha.clamp(0.0, 1.0)
+}
+fn fade_out(mut current_alpha: f32, rate: f32) -> f32 {
+    current_alpha -= rate;
+    return current_alpha.clamp(0.0, 1.0)
+}
 fn calculate_player(mut x: f32, mut y: f32, mut xm: f32, mut ym: f32) -> (f32, f32, f32, f32) {
     let friction: f32 = 40.0;
     let dims: f32 = 50.0;
@@ -63,48 +71,97 @@ async fn main() {
     let mut first_play: bool = true;
     loop {
         let top_score: u32 = load_score();
+        let mut qalpha: f32 = 0.0;
+        let mut palpha: f32 = 0.0;
+        let title_screen: Texture2D;
+        let mut transition = false;
         loop {
-        if is_key_pressed(KeyCode::P) { first_play = false; break; }
-        if is_key_pressed(KeyCode::Q) { exit(0) }
-        let mut playx: f32 = (screen_width() / 2.0) - (playdims / 2.0);
-        let mut playy: f32 = (screen_height() / 2.0) - (playdims / 2.0) + 100.0;
-        let mut quitx: f32 = (screen_width() / 2.0) - (quitdims / 2.0);
-        let mut quity: f32 = (screen_height() / 2.0) - (quitdims / 2.0) + 250.0;
-        let textx: f32 = screen_width() / 2.0;
-        let texty: f32 = (screen_height() / 2.0) - 50.0;
-        if collision(mouse_position().0, mouse_position().1, 0.1, 0.1, playx, playy, playdims, playdims) {
-            if is_mouse_button_pressed(MouseButton::Left) {
-                first_play = false;
-                break;
+            if is_key_pressed(KeyCode::P) { first_play = false; transition = true; }
+            if is_key_pressed(KeyCode::Q) { exit(0) }
+            let mut playx: f32 = (screen_width() / 2.0) - (playdims / 2.0);
+            let mut playy: f32 = (screen_height() / 2.0) - (playdims / 2.0) + 100.0;
+            let mut quitx: f32 = (screen_width() / 2.0) - (quitdims / 2.0);
+            let mut quity: f32 = (screen_height() / 2.0) - (quitdims / 2.0) + 250.0;
+            let textx: f32 = screen_width() / 2.0;
+            let texty: f32 = (screen_height() / 2.0) - 50.0;
+            if collision(mouse_position().0, mouse_position().1, 0.1, 0.1, playx, playy, playdims, playdims) {
+                if is_mouse_button_pressed(MouseButton::Left) { first_play = false; transition = true; }
+                playdims = 120.0;
             }
-            playdims = 120.0;
-        } else {
-            playdims = 100.0;
-        }
-        if collision(mouse_position().0, mouse_position().1, 0.1, 0.1, quitx, quity, quitdims, quitdims) {
-            if is_mouse_button_pressed(MouseButton::Left) {
-                exit(0);
+            else { playdims = 100.0; }
+            if collision(mouse_position().0, mouse_position().1, 0.1, 0.1, quitx, quity, quitdims, quitdims) {
+                if is_mouse_button_pressed(MouseButton::Left) {
+                    exit(0);
+                }
+                quitdims = 120.0;
             }
-            quitdims = 120.0;
-        } else {
-            quitdims = 100.0;
+            else { quitdims = 100.0; }
+            playx = (screen_width() / 2.0) - (playdims / 2.0);
+            playy = (screen_height() / 2.0) - (playdims / 2.0) + 100.0;
+            quitx = (screen_width() / 2.0) - (quitdims / 2.0);
+            quity = (screen_height() / 2.0) - (quitdims / 2.0) + 250.0;
+            clear_background(BLUE);
+            if collision(mouse_position().0, mouse_position().1, 0.1, 0.1, playx, playy, playdims, playdims) { palpha = fade_in(palpha, 0.1); } else { palpha = fade_out(palpha, 0.1); }
+            let play_label = "Play";
+            let play_text_dims = measure_text(play_label, None, 60, 1.0);
+            draw_text(
+                play_label,
+                playx + playdims + 20.0,
+                playy + (playdims + play_text_dims.height) / 2.0,
+                60.0,
+                Color {r: 0.9, g: 0.16, b: 0.22, a: palpha},
+            );
+            if collision(mouse_position().0, mouse_position().1, 0.1, 0.1, quitx, quity, quitdims, quitdims) { qalpha = fade_in(qalpha, 0.1); } else { qalpha = fade_out(qalpha, 0.1); }
+            let quit_label = "Quit";
+            let quit_text_dims = measure_text(quit_label, None, 60, 1.0);
+            draw_text(
+                quit_label,
+                quitx + quitdims + 20.0,
+                quity + (quitdims + quit_text_dims.height) / 2.0,
+                60.0,
+                Color {r: 0.9, g: 0.16, b: 0.22, a: qalpha},
+            );
+            let play_label = if first_play { "Play" } else { "Play Again?" };
+            let text_dimensions = measure_text(play_label, None, 200, 1.0);
+            draw_text(play_label, textx - text_dimensions.width / 2.0, texty, 200.0, ORANGE);
+            let score_text = format!("Top score: {}", top_score);
+            let score_dimensions = measure_text(&score_text, None, 75, 1.0);
+            draw_text(&score_text, textx - score_dimensions.width / 2.0, texty + 80.0, 75.0, ORANGE);
+            draw_rectangle(playx, playy, playdims, playdims, ORANGE);
+            draw_rectangle(quitx, quity, quitdims, quitdims, ORANGE);
+            let p_text = "P";
+            let p_dim = measure_text(p_text, None, 80, 1.0);
+            draw_text(
+                p_text,
+                playx + (playdims - p_dim.width) / 2.0,
+                playy + (playdims + p_dim.height) / 2.0,
+                80.0,
+                RED,
+            );
+            let q_text = "Q";
+            let q_dim = measure_text(q_text, None, 80, 1.0);
+            draw_text(
+                q_text,
+                quitx + (quitdims - q_dim.width) / 2.0,
+                quity + (quitdims + q_dim.height) / 2.0,
+                80.0,
+                RED,
+            );
+            if transition { let title_screenshot: Image = get_screen_data(); title_screen = Texture2D::from_image(&title_screenshot); next_frame().await; break; }
+            next_frame().await;
         }
-        playx = (screen_width() / 2.0) - (playdims / 2.0);
-        playy = (screen_height() / 2.0) - (playdims / 2.0) + 100.0;
-        quitx = (screen_width() / 2.0) - (quitdims / 2.0);
-        quity = (screen_height() / 2.0) - (quitdims / 2.0) + 250.0;
-        clear_background(BLUE);
-        if first_play {
-            draw_text("Play", textx - 150.0, texty, 200.0, ORANGE);
-        } else {
-            draw_text("Play Again?", textx - 450.0, texty, 200.0, ORANGE);
-        }
-        draw_text(&format!("Top score: {}", top_score.to_string()), textx - 175.0, texty + 80.0, 75.0, ORANGE);
-        draw_rectangle(playx, playy, playdims, playdims, ORANGE);
-        draw_text("P", playx + 30.0, playy + 60.0, 80.0, RED);
-        draw_rectangle(quitx, quity, quitdims, quitdims, ORANGE);
-        draw_text("Q", quitx + 30.0, quity + 60.0, 80.0, RED);
-        next_frame().await;
+        let mut transition_alpha: f32 = 0.0;
+        for i in 0..100 {
+            if i <= 49 {
+                transition_alpha = fade_in(transition_alpha, 0.02);
+                draw_texture_ex(&title_screen, 0.0, 0.0, WHITE, DrawTextureParams { flip_y: true, ..Default::default()});
+            } else {
+                transition_alpha = fade_out(transition_alpha, 0.02);
+                clear_background(BLUE);
+                draw_rectangle((screen_width() / 2.0) - 100.0, (screen_height() / 2.0) - 25.0, 50.0, 50.0, YELLOW);
+            }
+            draw_rectangle(0.0, 0.0, screen_width(), screen_height(), Color {r: 0.0, g: 0.0, b: 0.0, a: transition_alpha});
+            next_frame().await;
         }
         let pdims: f32 = 50.0;
         let ow: f32 = 50.0;
@@ -117,9 +174,10 @@ async fn main() {
         let mut pxm: f32 = 0.0;
         let mut pym: f32 = 0.0;
         let mut score: u32 = 0;
+        let death_screen: Texture2D;
+        transition = false;
         loop {
-            if collision(px, py, pdims, pdims, ox, oy1, oh, ow) { break }
-            if collision(px, py, pdims, pdims, ox, oy2, oh, ow) { break }
+            if collision(px, py, pdims, pdims, ox, oy1, oh, ow) || collision(px, py, pdims, pdims, ox, oy2, oh, ow) { transition = true; }
             if ox + ow <= 0.0 { ox = screen_width(); (oy1, oy2) = spawn_obstacle(); score += 1; }
             (px, py, pxm, pym) = calculate_player(px, py, pxm, pym);
             ox -= 10.0 + (2 * (score/5)) as f32;
@@ -129,8 +187,21 @@ async fn main() {
             draw_rectangle(px, py, pdims, pdims, YELLOW);
             let your_score: String = ("Score: ".to_string() + &score.to_string()).to_string();
             draw_text(&your_score, 0.0, 30.0, 50.0, ORANGE);
+            if transition { let death_screenshot: Image = get_screen_data(); death_screen = Texture2D::from_image(&death_screenshot); next_frame().await; break;}
             next_frame().await;
         }
         if score > load_score() { save_score(score) }
+        let mut transition_alpha: f32 = 0.0;
+        for i in 0..100 {
+            if i <= 49 {
+                transition_alpha = fade_in(transition_alpha, 0.02);
+                draw_texture_ex(&death_screen, 0.0, 0.0, WHITE, DrawTextureParams { flip_y: true, ..Default::default()});
+            } else {
+                transition_alpha = fade_out(transition_alpha, 0.02);
+                draw_texture_ex(&title_screen, 0.0, 0.0, WHITE, DrawTextureParams { flip_y: true, ..Default::default()});
+            }
+            draw_rectangle(0.0, 0.0, screen_width(), screen_height(), Color {r: 0.0, g: 0.0, b: 0.0, a: transition_alpha});
+            next_frame().await;
+        }
     }
 }
